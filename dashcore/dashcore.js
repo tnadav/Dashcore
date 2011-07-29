@@ -92,16 +92,6 @@ $._selector.counter = 0;
     var initializing = false;
     var interfaces = [];
 
-    // A private function used by $.Object and $.Interface
-    //    Takes a callback function, parse it and returns an array of the function arguments
-    function getFunctionArguments(callback) {
-        match = getFunctionArguments.argsMatch.exec(callback.toString());
-        match[1] = match[1].replace(getFunctionArguments.removeWhiteSpace, '');
-        return match[1].split(',');
-    }
-    getFunctionArguments.argsMatch = /function(?:\s*)\(([\s\w\$,]*)\)/;
-    getFunctionArguments.removeWhiteSpace = /\s*/g;
-
     $.Object = function() {};
 
     $.Object.subclass = function(definition) {
@@ -174,7 +164,7 @@ $._selector.counter = 0;
                     throw("Dashcore.Interface - implement: static method "+i+
                                 " does not exists");
     
-                nargs = getFunctionArguments(this[i]).length
+                nargs = this[i].length;
                 if(nargs != definition['static'][i]) {
                     throw("Dashcore.Interface - implement: static method "+i+" has "+
                                 nargs+" arguments instead of "+definition['static'][i]);
@@ -187,7 +177,7 @@ $._selector.counter = 0;
             if(typeof this.prototype[i] == 'undefined')
                 throw("Dashcore.Interface - implement: method "+i+" does not exists");
     
-            nargs = getFunctionArguments(this.prototype[i]).length
+            nargs = this.prototype[i].length
             if(nargs != definition[i]) {
                 throw("Dashcore.Interface - implement: method "+i+" has "+nargs+
                             " arguments instead of "+definition[i]);
@@ -242,7 +232,7 @@ $._selector.counter = 0;
             if(typeof definition[i] == "function") {
                 // Interfaces only care about function name and number of arguments
                 //    but it may change
-                returnVal[i] = getFunctionArguments(definition[i]).length;
+                returnVal[i] = definition[i].length;
             }
         }
         return returnVal;
@@ -347,12 +337,25 @@ $.plugIn = function(functionName, theFunction, valueOverrideFunction) {
 // Require function: used to import libraries components
 // require only imports file once, if the file was already imported then the function does nothing
 
-var dashcorelibrary = 'dashcore';
+// Find dashcore directory: importanat for the Require function
+var scriptTags = document.getElementsByTagName('script'),
+    slength = scriptTags.length,
+    isDashcoreDotJS = /\bdashcore.js$/;
+
+for(var i = 0; i< slength; i++) {
+    if(isDashcoreDotJS.test(scriptTags[i].src)) {
+        // Store dashcore directory in a private variable
+        var dashcoreDirectory = scriptTags[i].src.replace(isDashcoreDotJS, '');
+        break;
+    }
+}
++delete scriptTags, slength, isDashcoreDotJS;
+
 $.Require = function(src, onload, onfailure) {
     // Check if file was already loaded
-    var importedLength = this.importedFiles.length;
+    var importedLength = $.Require.importedFiles.length;;
     for(var i = 0; i < importedLength; i++) {
-        if(this.importedFiles[i] == src)
+        if($.Require.importedFiles.length == src)
             return;
     }
     delete i, importedLength;
@@ -362,17 +365,22 @@ $.Require = function(src, onload, onfailure) {
                 document.documentElement, 
                 script = document.createElement("script"); 
     script.type = "text/javascript"; 
-    script.src = src; 
+    //script.src = dashcoreDirectory+src; 
+	script.src = src;
 
     // Set the script events
-    if(onload)
-        script.onload = onload;
+    script.onload = function() {
+	    $.Require.importedFiles['test-require.js'] = true;
+	    if(onload != undefined)
+	        onload();
+	}
 
 	onfailure = onfailure || function() {
 		throw('Dashcore.Include: the script '+src+' was failed to load');
     }
     script.onerror = onfailure;
-    head.appendChild( script ); 
+    head.appendChild( script );
+
     head.removeChild( script ); 
 }
 $.Require.importedFiles = [];
