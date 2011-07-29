@@ -39,9 +39,9 @@
 //-----------------------------------------------------------------
 // If there already is $ variable, we don't want it to interrupt our $ function. So, we save it
 //    on a tempraory variable and decide what to do with it later when exposing the variables
-if($ != undefined) {
-    var __DASHCORE_OLD_$__ = $;
-    delete $;
+if(typeof window.$ != 'undefined') {
+    var __DASHCORE_OLD_$__ = window.$;
+    delete window.$;
 }
 //------------------------------------------------------------------
 // $ object. this object is the main namespace for our function. it's also a function that can
@@ -334,57 +334,168 @@ $.plugIn = function(functionName, theFunction, valueOverrideFunction) {
 	return this;
 }
 
-// Require function: used to import libraries components
-// require only imports file once, if the file was already imported then the function does nothing
+//------------------------------------------------------------------
+// Dynamic JavaScript loading mechanism
 
-// Find dashcore directory: importanat for the Require function
+// Common variable
+var requireExecutionQueue    = [],
+    requireImportedFiles    = [],
+    isQueueRunning            = false,
+    requireNamespaces        = {};
+
+// Find dashcore directory: important for the Require function
+//    dashcore directory is used as the $ namespace
 var scriptTags = document.getElementsByTagName('script'),
     slength = scriptTags.length,
-    isDashcoreDotJS = /\bdashcore.js$/;
+    isDashcoreDotJS = /\b\/?dashcore.js$/;
 
 for(var i = 0; i< slength; i++) {
     if(isDashcoreDotJS.test(scriptTags[i].src)) {
         // Store dashcore directory in a private variable
-        var dashcoreDirectory = scriptTags[i].src.replace(isDashcoreDotJS, '');
+        requireNamespaces['$'] = scriptTags[i].src.replace(isDashcoreDotJS, '');
         break;
     }
 }
-+delete scriptTags, slength, isDashcoreDotJS;
+// Cleanup calculations
+delete scriptTags, slength, isDashcoreDotJS;
 
-$.Require = function(src, onload, onfailure) {
+// globalEvel function: evaluate code in the global scope
+//     a slightly modified version of the globalEvel function that can be found in the
+//    book "Secrets of the JavaScript Ninja" by John Resig.
+//    based on the work of Andrea Giammarchi:
+//    http://webreflection.blogspot.com/2007/08/global-scope-evaluation-and-dom.html˝
+function globalEval(data) { 
+    data = data.replace(/^\s*|\s*$/g, ""); 
+    if (data) { 
+        var head = document.getElementsByTagName("head")[0] || 
+            document.documentElement, 
+            script = document.createElement("script");
+        script.type = "text/javascript"; 
+        script.text = data;
+        head.appendChild( script );
+        head.removeChild( script );
+     }
+}
+
+// filterUrl function: parses the url and get the actual path
+//    taken from the omgrequire jquery branch
+function filterUrl(url) {
+    if ( !/\./.test(url) || (/^([\w\d$]+)./.test(url) && !/\//.test( url ) && !/.js$/.test( url )) ) {
+        url = url.replace(/\./g, "/").replace(/^([\w\d$]+)./, function(all, name) {
+            return (requireNamespaces[name] || name) + "/";
+        }) + ".js";
+    }
+    return url;
+}
+
+// parseFile function: find file dependancies and recursively execute the scripts
+//  
+function parseFile(url, content, onload) {
+    //console.log('ParseFile called, url: '+url);
+    // First, find the files depandencies
+    content = content.replace(parseFile.findDependancies, function(all, match) {
+        match = filterUrl(match);
+        if(match in requireImportedFiles)
+            return '';
+
+        requireExecutionQueue.push({'url':match, 'onload':null, 'content':null});
+        var matchKey = requireExecutionQueue.length;
+        loadFile(match, null, function(content) {
+            requireExecutionQueue[matchKey].content = content;
+
+            // Adds the orginal file to the queue
+            // Adds clusure to make the file local, and make sure $ is pointing to dashcore
+            content = "(function($) {"+content+"})(Dashcore);";
+            requireExecutionQueue.push({'url':url, 'onload':onload, 'content':content});
+        });
+        return '';
+    });
+    
+    //console.dir(requireExecutionQueue);
+}
+parseFile.findDependancies = /^#\s?Require\s*([a-z0-9\.$]*)/gmi
+
+function loadNextFile() {
+    // Get lastest file
+    var nextFile = requireExecutionQueue.shift();
+    if(typeof nextFile == 'undefined' || nextFile.content === false) {
+        isQueueRunning = false;
+        return;
+    }
+}
+function loadFile(url, onload, onreadload) {
+	url = filterUrl(url);
     // Check if file was already loaded
-    var importedLength = $.Require.importedFiles.length;;
-    for(var i = 0; i < importedLength; i++) {
-        if($.Require.importedFiles.length == src)
-            return;
+    console.log('LoadFile called, url: '+url);
+    //console.dir(requireImportedFiles);
+    console.dir(requireExecutionQueue);
+    if(url in requireImportedFiles) {
+        console.log('Caught a duplicate file request: '+url);
+        if(typeof onload == 'function')
+            onload();
+        return;
     }
-    delete i, importedLength;
 
-    // Inject the script to the document
-    var head = document.getElementsByTagName("head")[0] || 
-                document.documentElement, 
-                script = document.createElement("script"); 
-    script.type = "text/javascript"; 
-    //script.src = dashcoreDirectory+src; 
-	script.src = src;
+	requireImportedFiles[url] = true;
 
-    // Set the script events
-    script.onload = function() {
-	    $.Require.importedFiles['test-require.js'] = true;
-	    if(onload != undefined)
-	        onload();
-	}
-
-	onfailure = onfailure || function() {
-		throw('Dashcore.Include: the script '+src+' was failed to load');
-    }
-    script.onerror = onfailure;
-    head.appendChild( script );
-
-    head.removeChild( script ); 
+	$.File.read(url, function(content) {
+        parseFile(url, content, onload);
+        if(typeof onreadload == 'function') {
+            window.setTimeout(function() {onreadload()}, 1);
+        }
+    });
+}
+// Require function: used to import libraries components
+// require only imports file once, if the file was already imported then the function does nothing
+$.Require = function(url, onload) {
+    loadFile(url, onload);
 }
 $.Require.importedFiles = [];
 
+$.Namespace = {};
+$.Namespace.add = function(ns, url) {
+    requireNamespaces[ns] = url;
+}
+
+$.Namespace.Delete = function(ns) {
+    delete requireNamespaces[ns];
+}
+
+// LoadFile function: asynchronous way of loading plain text files to a variables using
+//    iframe. while using AJAX appears to be a more simple solution, it can't be done locally,
+//    and in the widget enviorment, everything MUST be local
+//
+//    the function onload first argument will be the content of the file, and this will point
+//    to the actual iframe
+$.File = {};
+$.File.read = function(path, onloadfn, timeout) {
+    // Create the iframe
+    var iframe    = document.createElement('iframe'),
+        timeout    = timeout || 3000,                    // 3 seconds
+        handler,
+        ADate = new Date();
+    unixTime = ADate.getTime();
+
+//    iframe.style.display = 'none';                    // Make the iframe invisiable
+    iframe.src = path+'?__'+unixTime+'='+unixTime;
+    
+
+    iframe.onload = function() {
+        iframe.contentWindow.location.replace(iframe.src);    // prevent caching in firefox
+        // Clear all the mess
+        window.clearTimeout(handler);
+        iframe.onload = null;
+        if(typeof onloadfn != 'undefined')
+            onloadfn.call(iframe, iframe.contentDocument.body.textContent);
+        //document.documentElement.removeChild(iframe);
+    }
+    document.documentElement.appendChild(iframe);
+    handler = window.setTimeout(function() {
+        throw "The file "+path+
+                " has taken to long to be loaded (timeout = "+timeout+")";
+    }, timeout);
+}
+
 // Expose the library
-window.$ = $;
+window.$ = window.Dashcore = $;
 })();
