@@ -273,7 +273,7 @@ function ChainerObjectFactory(elements, id) {
     ChainerObjectFactory.objects[id]._resetValue();
     return ChainerObjectFactory.objects[id];
 }
-ChainerObjectFactory.objects = {};
+ChainerObjectFactory.objects = [];
 
 ChainerObject = $.Object.subclass({
     'init': function(elements) {

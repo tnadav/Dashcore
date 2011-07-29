@@ -33,11 +33,11 @@ $.plugIn('each', function(fn) {
     
 }, function() {
     return 'test3';
+}).plugIn('changeElements', function() {
+	this.elements = 1;
 });
 
-// Insert an html box to play with
 test('Using plugged in methods', function() {
-    //console.dir( 'item' in $('#testbox').value() );
     ok('item' in ($('#testbox').value()), 'Check the generic value function');
     ok($('#testbox').test1().value() == 'test1', 'Check the test1 value function');
     ok('item' in ($('#testbox').test1().test2().value()), 'Check if test2 reset the value function');
@@ -45,9 +45,12 @@ test('Using plugged in methods', function() {
 });
 module("Chaining and flyweight cheacking");
 test('Test save function', function() {
-    
-});
+	// CO = Chainer Object
+    var genericCO    = $('#testbox');
+    var savedCO        = $('#testbox').save();
+    ok(genericCO.id != savedCO.id, 'Check if the new saved ChainerObject has different id');
 
-test('POC include test', function() {
-	ok(window.__itest__ == 5, 'Test if include worked');
+    $('#testbox').changeElements();
+    ok(genericCO.elements == 1, 'Check the if the flyweight behavior is correct');
+    ok(savedCO.elements != 1, 'Check if saved CO remained unharmned');
 });
