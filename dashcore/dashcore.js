@@ -244,13 +244,75 @@ $._selector.couter = 0;
 
 //------------------------------------------------------------------
 // ChainerObject - The object used to chain commands. The idea of the API is that you select a
-//    number of elements, do as many commands you want using chainning, and then call the value()
-//    function if you want a value to be returend
+//    number of elements, do as many commands you want using chainning, and then call either the
+//    value() function if you want a value to be returend, or the save() function in order to save
+//    a copy of ChainerObject.
+//
+// Inspired by Ext Core's fly
+function ChainerObjectFactory(elements, id) {
+    var id = id || '_0';
+
+    if(!(id in ChainerObjectFactory.objects))
+        ChainerObjectFactory.objects[id] = new ChainerObject();
+
+    ChainerObjectFactory.objects[id].elements = elements;
+    ChainerObjectFactory.objects[id].id = id;
+
+    
+
+    // Resets the value() function
+    ChainerObjectFactory.objects[id].prototype.value = 
+        ChainerObjectFactory.objects[id].prototype._genericValue;
+    return ChainerObjectFactory.objects[id];
+}
+ChainerObjectFactory.objects = {};
+
+ChainerObject = $.Object.subclass({
+    'init': function(elements) {
+        if(typeof elements != "undefined")
+        this.elements = elements;
+        return this;
+    },
+    // A generic value function. The idea is that chained function can modify that function so
+    //    that value() is relevent to the last function in the chain.
+    //    Note that it is only used per chian, it gets reset when a new chain is created
+    //    DO NOT override this function!
+    '_genericValue': function() {
+        return this.elements;
+    },
+    // Note that save is actually clones the object.
+    //    The name comes becuse users are going to use it in order to save the Chainerobject
+    //    for later use.
+    'save': function(id) {
+        var id = id || ChainerObjectFactory.objects.length + 1;
+        return ChainerObjectFactory(this.elements, id);
+    },
+    'delete': function() {
+        delete ChainerObjectFactory.objects[this.id];
+    }
+});
 
 //------------------------------------------------------------------
 // Common functions that will be under the $. namespace
 
+// Users can extend Dashcore n two ways: they can add static functions to the Dahscore library
+//    by either doing something like this: $.staticFunction = function() {};,
+//    or extend the ChainerObject by using the plugIn function, like this:
+//    $.plugIn('firstFunction', function() {}[,Value function, overrides the default value function]).
+//    plugIn('secondFunction')...
+
 // PlugIn function: used to plug plugins into the library
+$.plugIn = function(functionName, theFunction, valueOverrideFunction) {
+    if(typeof valueOverrideFunction != 'function')
+        delete valueOverrideFunction;
+
+    var valueOverrideFunction = valueOverrideFunction || this.prototype._genericValue;
+    ChainerObject.prototype[functionName] = function() {
+        this.value = valueOverrideFunction;
+        theFunction();
+        return this;
+    }
+}
 
 // Namespace function: makes a plugin to be global 
 
