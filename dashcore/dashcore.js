@@ -48,16 +48,24 @@ if($ != undefined) {
 //    recive  either CSS selector or HtmlDOMElement and return a chainer object for the resaulting
 //    elements
 function $(subject) {
-    /*if(typeof subject == 'string')
-        return ChainerObject(this._selector);
+    if(typeof subject == 'string')
+		return ChainerObjectFactory($._selector(subject));
 
-    return ChainerObject([subject]);*/
+    return ChainerObjectFactory([subject]);
 }
 
 // taken from the book "Secrets of the JavaScript Ninja" by John Resig: chapter 11 page 115-116
 $._selector = function(query, element) {
-    if(typeof element == 'undefined')
-        return document.querySelectorAll(query);
+    if(typeof element == 'undefined') {
+		// TODO: Optimize #id
+		
+		
+		// Optimize body
+		if(query == 'body')
+		    return document.body;
+		return document.querySelectorAll(query);
+	}
+        
 
     var oldID = element.id;
     element.id = "__DASHCORE_SELECTOR_ROOT_"+(++this.counter)+"__";
@@ -70,7 +78,7 @@ $._selector = function(query, element) {
         element.id = oldId;
     }
 }
-$._selector.couter = 0;
+$._selector.counter = 0;
 
 //------------------------------------------------------------------
 // $.Object - The base object that every Dashcore object will inherit
@@ -248,7 +256,10 @@ $._selector.couter = 0;
 //    value() function if you want a value to be returend, or the save() function in order to save
 //    a copy of ChainerObject.
 //
-// Inspired by Ext Core's fly
+// ChainerObject is implementing a flyWeight design pattern inspired by Ext Core's fly, but the
+//    difference is that instead of having two different methods - one for flyWeight and one that
+//    isn't flyweighted, you the flyWeight and can save the flyWeight to another, saperate flyWeight
+//    with no need to worry about conflicts
 function ChainerObjectFactory(elements, id) {
     var id = id || '_0';
 
@@ -258,11 +269,8 @@ function ChainerObjectFactory(elements, id) {
     ChainerObjectFactory.objects[id].elements = elements;
     ChainerObjectFactory.objects[id].id = id;
 
-    
-
-    // Resets the value() function
-    ChainerObjectFactory.objects[id].prototype.value = 
-        ChainerObjectFactory.objects[id].prototype._genericValue;
+ 	// Resets the value() function
+    ChainerObjectFactory.objects[id]._resetValue();
     return ChainerObjectFactory.objects[id];
 }
 ChainerObjectFactory.objects = {};
@@ -270,7 +278,11 @@ ChainerObjectFactory.objects = {};
 ChainerObject = $.Object.subclass({
     'init': function(elements) {
         if(typeof elements != "undefined")
-        this.elements = elements;
+        	this.elements = elements;
+
+		// Reset the state of value function being changed
+		this.valueFunctionChanged = false
+		this.value = this._genericValue;
         return this;
     },
     // A generic value function. The idea is that chained function can modify that function so
@@ -280,6 +292,18 @@ ChainerObject = $.Object.subclass({
     '_genericValue': function() {
         return this.elements;
     },
+	// Sets the value function to the generic one if neccecery
+	'_resetValue': function() {
+	    if(this.valueFunctionChanged)
+	        this.value = this._genericValue;
+	
+	    this.valueFunctionChanged = false;
+	},
+	// Sets the value function to another function
+	'_setValue': function(fn) {
+	    this.value = fn;
+	    this.valueFunctionChanged = true;
+	},
     // Note that save is actually clones the object.
     //    The name comes becuse users are going to use it in order to save the Chainerobject
     //    for later use.
@@ -306,12 +330,18 @@ $.plugIn = function(functionName, theFunction, valueOverrideFunction) {
     if(typeof valueOverrideFunction != 'function')
         delete valueOverrideFunction;
 
-    var valueOverrideFunction = valueOverrideFunction || this.prototype._genericValue;
     ChainerObject.prototype[functionName] = function() {
-        this.value = valueOverrideFunction;
-        theFunction();
+        if(typeof valueOverrideFunction != "undefined")
+		    this._setValue(valueOverrideFunction);
+		else
+		    this._resetValue();
+		
+		theFunction.apply(this, arguments);
         return this;
     }
+
+	// Enable chaining
+	return this;
 }
 
 // Namespace function: makes a plugin to be global 
