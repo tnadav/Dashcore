@@ -344,9 +344,38 @@ $.plugIn = function(functionName, theFunction, valueOverrideFunction) {
 	return this;
 }
 
-// Namespace function: makes a plugin to be global 
+// Require function: used to import libraries components
+// require only imports file once, if the file was already imported then the function does nothing
 
-// Import function: used to import libraries components
+var dashcorelibrary = 'dashcore';
+$.Require = function(src, onload, onfailure) {
+    // Check if file was already loaded
+    var importedLength = this.importedFiles.length;
+    for(var i = 0; i < importedLength; i++) {
+        if(this.importedFiles[i] == src)
+            return;
+    }
+    delete i, importedLength;
+
+    // Inject the script to the document
+    var head = document.getElementsByTagName("head")[0] || 
+                document.documentElement, 
+                script = document.createElement("script"); 
+    script.type = "text/javascript"; 
+    script.src = src; 
+
+    // Set the script events
+    if(onload)
+        script.onload = onload;
+
+	onfailure = onfailure || function() {
+		throw('Dashcore.Include: the script '+src+' was failed to load');
+    }
+    script.onerror = onfailure;
+    head.appendChild( script ); 
+    head.removeChild( script ); 
+}
+$.Require.importedFiles = [];
 
 // Expose the library
 window.$ = $;

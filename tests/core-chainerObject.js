@@ -47,3 +47,7 @@ module("Chaining and flyweight cheacking");
 test('Test save function', function() {
     
 });
+
+test('POC include test', function() {
+	ok(window.__itest__ == 5, 'Test if include worked');
+});
