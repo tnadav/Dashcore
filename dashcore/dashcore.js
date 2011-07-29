@@ -34,7 +34,7 @@
 // We make an anonymous function that called immediately and we use the fact that the scope of
 //    a function is not global. that way, we can be sure that we don't pollute the global namespace
 
-(function() {
+(function Dashcore_Closure() {
 
 //-----------------------------------------------------------------
 // If there already is $ variable, we don't want it to interrupt our $ function. So, we save it
@@ -363,17 +363,24 @@ delete scriptTags, slength, isDashcoreDotJS;
 //     a slightly modified version of the globalEvel function that can be found in the
 //    book "Secrets of the JavaScript Ninja" by John Resig.
 //    based on the work of Andrea Giammarchi:
-//    http://webreflection.blogspot.com/2007/08/global-scope-evaluation-and-dom.html˝
+//    http://webreflection.blogspot.com/2007/08/global-scope-evaluation-and-dom.html
 function globalEval(data) { 
     data = data.replace(/^\s*|\s*$/g, ""); 
     if (data) { 
-        var head = document.getElementsByTagName("head")[0] || 
+        /*var head = document.getElementsByTagName("head")[0] || 
             document.documentElement, 
             script = document.createElement("script");
         script.type = "text/javascript"; 
         script.text = data;
         head.appendChild( script );
-        head.removeChild( script );
+        head.removeChild( script );*/
+
+		try {
+		    eval(data);
+		} catch(e) {
+		    console.dir(e);
+		    throw e;
+		}
      }
 }
 
@@ -390,47 +397,93 @@ function filterUrl(url) {
 
 // parseFile function: find file dependancies and recursively execute the scripts
 //  
-function parseFile(url, content, onload) {
-    //console.log('ParseFile called, url: '+url);
+function parseFile(url, inputUrl, content, onload) {
     // First, find the files depandencies
+	var dependancies = [];
+
     content = content.replace(parseFile.findDependancies, function(all, match) {
-        match = filterUrl(match);
         if(match in requireImportedFiles)
             return '';
-
-        requireExecutionQueue.push({'url':match, 'onload':null, 'content':null});
-        var matchKey = requireExecutionQueue.length;
-        loadFile(match, null, function(content) {
-            requireExecutionQueue[matchKey].content = content;
-
-            // Adds the orginal file to the queue
-            // Adds clusure to make the file local, and make sure $ is pointing to dashcore
-            content = "(function($) {"+content+"})(Dashcore);";
-            requireExecutionQueue.push({'url':url, 'onload':onload, 'content':content});
-        });
+		
+		dependancies.push(match);
         return '';
     });
     
-    //console.dir(requireExecutionQueue);
+    // Adds clusure to make the file local, and make sure $ is pointing to dashcore
+    content = "(function "+inputUrl.replace(/[\.\-+]/g, '_')+"($) {\n"+content+"\n})(Dashcore);";
+
+    var length = dependancies.length;
+    // If there are no dependancies, simply add current file to the queue
+    if(length == 0) {
+        // Check if the current file is already on the queue (Dependancies are added to the queue
+        //    Instantly so if this file is other file's dependancy it is already added)
+        var qLength = requireExecutionQueue.length,
+            isFileFound = false;
+        for(var i = 0; i < qLength; i++) {
+            // Check if the file on the queue is this file by url
+            if(requireExecutionQueue[i].url == url) {
+                // This file is in this queue
+                requireExecutionQueue[i]['content'] = content;    // Adds this file content to the queue
+                isFileFound = true;
+                
+                // File was found, prevent from the loop to run again
+                break;
+            }
+        }
+
+        // If the file was not found in the queue
+        if(!isFileFound) {
+            // Add the file to the queue
+            requireExecutionQueue.push({'url':url, 'inputUrl':inputUrl,'onload':onload, 'content':content});
+        }
+    } else {
+        --length;
+        for(var i = 0; i<length; i++)
+            $.Require(dependancies[i]);
+
+        // Special action for the last dependancy
+        $.Require(dependancies[length], (function() {
+            var loadedUrl = dependancies[length];
+            
+            return function() {
+                // Add the current file to the queue after the lastest file dependancies
+                requireExecutionQueue.push({'url':url, 'inputUrl':inputUrl, 'onload':onload, 'content':content});
+            }
+        })());
+    }
 }
 parseFile.findDependancies = /^#\s?Require\s*([a-z0-9\.$]*)/gmi
 
 function loadNextFile() {
-    // Get lastest file
-    var nextFile = requireExecutionQueue.shift();
-    if(typeof nextFile == 'undefined' || nextFile.content === false) {
+	// Stop queue there are no files in the queue or the next file hadn't loaded yet
+    if(requireExecutionQueue.length == 0 || requireExecutionQueue[0].content === false) {
+        //console.log('Stopped queue on '+requireExecutionQueue[0].url);
         isQueueRunning = false;
         return;
     }
+	isQueueRunning = true;
+	// Get the next file in the queue
+	var nextFile = requireExecutionQueue.shift();
+	// Execute the file
+	try {
+	    eval(nextFile.content);
+	} catch(e) {
+	    throw nextFile.inputUrl+": "+e.name+": "+e.message+" on line "+e.line;
+	}
+	// After the file had finally loaded:
+	// Execute onload event
+	if(typeof nextFile.onload == 'function')
+	    nextFile.onload();
+	delete nextFile;
+	// load next file
+	loadNextFile();
 }
-function loadFile(url, onload, onreadload) {
-	url = filterUrl(url);
+// Require function: used to import libraries components
+// require only imports file once, if the file was already imported then the function does nothing
+$.Require = function(inputUrl, onload) {
+    url = filterUrl(inputUrl);
     // Check if file was already loaded
-    console.log('LoadFile called, url: '+url);
-    //console.dir(requireImportedFiles);
-    console.dir(requireExecutionQueue);
     if(url in requireImportedFiles) {
-        console.log('Caught a duplicate file request: '+url);
         if(typeof onload == 'function')
             onload();
         return;
@@ -439,16 +492,14 @@ function loadFile(url, onload, onreadload) {
 	requireImportedFiles[url] = true;
 
 	$.File.read(url, function(content) {
-        parseFile(url, content, onload);
+        parseFile(url, inputUrl, content, onload);
         if(typeof onreadload == 'function') {
-            window.setTimeout(function() {onreadload()}, 1);
+			window.setTimeout(function() {onreadload(content)}, 1);
         }
+		// Try to start the execution queue
+		if(!isQueueRunning)
+		    loadNextFile();
     });
-}
-// Require function: used to import libraries components
-// require only imports file once, if the file was already imported then the function does nothing
-$.Require = function(url, onload) {
-    loadFile(url, onload);
 }
 $.Require.importedFiles = [];
 
@@ -458,7 +509,7 @@ $.Namespace.add = function(ns, url) {
 }
 
 $.Namespace.Delete = function(ns) {
-    delete requireNamespaces[ns];
+    delete requireNamespaces[NS];
 }
 
 // LoadFile function: asynchronous way of loading plain text files to a variables using
@@ -472,13 +523,11 @@ $.File.read = function(path, onloadfn, timeout) {
     // Create the iframe
     var iframe    = document.createElement('iframe'),
         timeout    = timeout || 3000,                    // 3 seconds
-        handler,
-        ADate = new Date();
-    unixTime = ADate.getTime();
+		handler;
 
-//    iframe.style.display = 'none';                    // Make the iframe invisiable
-    iframe.src = path+'?__'+unixTime+'='+unixTime;
-    
+	iframe.style.display = 'none';                    // Make the iframe invisiable
+	iframe.src = path;
+
 
     iframe.onload = function() {
         iframe.contentWindow.location.replace(iframe.src);    // prevent caching in firefox
@@ -487,7 +536,7 @@ $.File.read = function(path, onloadfn, timeout) {
         iframe.onload = null;
         if(typeof onloadfn != 'undefined')
             onloadfn.call(iframe, iframe.contentDocument.body.textContent);
-        //document.documentElement.removeChild(iframe);
+        document.documentElement.removeChild(iframe);
     }
     document.documentElement.appendChild(iframe);
     handler = window.setTimeout(function() {
