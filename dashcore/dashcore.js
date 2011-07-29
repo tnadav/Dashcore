@@ -83,7 +83,6 @@ $._selector.couter = 0;
 (function(){
     var initializing = false;
     var interfaces = [];
-    var is_SelfNeeded = /\bthis._Self\b/;
 
     // A private function used by $.Object and $.Interface
     //    Takes a callback function, parse it and returns an array of the function arguments
@@ -96,6 +95,7 @@ $._selector.couter = 0;
     getFunctionArguments.removeWhiteSpace = /\s*/g;
 
     $.Object = function() {};
+
     $.Object.subclass = function(definition) {
         // Creating a base class
         function ReturnedClass() {
@@ -107,46 +107,29 @@ $._selector.couter = 0;
         // Enforce the constructor to be what we expect
         ReturnedClass.constructor = ReturnedClass;
 
+		// Take care of inheritance
+
         // Instantiate a base class (but only create the instance, 
         // don't run the init constructor) 
         initializing = true;
-        var proto = new this();
+        var proto = new this();                // Inherit instance functions/properties
         initializing = false;
 
         // Take care of static methods and properties
         
-        // Inherit static functions
+        // Inherit static functions/properties
         for(var i in this) {
             ReturnedClass[i] = this[i];
         }
-        ReturnedClass.superclass = this;
-        // Augment the new class static functions
-        if("static" in definition) {
-            for(var i in definition["static"]) {
-                ReturnedClass[i] = definition["static"][i];
-            }
-        
-            delete definition["static"];
-        }
-
-        // Take care of instance variables and functions
-        
-        // Copy the properties over onto the new prototype
-        for(var name in definition) {
-            if(is_SelfNeeded.test(definition[name].toString())) {
-                proto[name] = (function(fn){
-                    returnVal = function() {
-                        return fn.apply(this, arguments);
-                    }
-                    returnVal.toString = function() {
-                        return fn.toString();
-                    }
-                    return returnVal;
-                })(definition[name]);
-            } else {
-                proto[name] = definition[name];
-            }
-        }
+		// Override superclass in order to be relevent
+        // Augment functions/properties from definition
+		// Augment static functions/properties
+		if('static' in definition)
+		    this.obtain.call(ReturnedClass, definition['static']);
+		// Augment instance functions/properties as static to proto, and then set
+		//    ReturnedClass's prototype to proto (in the end of the function)
+		this.obtain.call(proto, definition);
+		delete definition;
         
         // Populate our constructed prototype object 
         ReturnedClass.prototype = proto;
@@ -154,6 +137,22 @@ $._selector.couter = 0;
         ReturnedClass.prototype._Self = ReturnedClass;
         return ReturnedClass;
     }
+
+	$.Object.extend = function(definition) {
+	    // Augment static functions/properties
+	    if("static" in definition) {
+	        this.obtain.call(this, definition['static']);
+	        delete definition['static'];
+	    }
+	
+	    // Augment instance functions/properties
+	    this.obtatin.call(this.prototype, definition)
+	}
+	
+	$.Object.obtain = function(functions) {
+	    for(i in functions)
+	        this[i] = functions[i];
+	}
 
     $.Object.implement = function(interfacePointer) {
         // Gets the actual interface from the pointer
