@@ -34,7 +34,7 @@
 // We make an anonymous function that called immediately and we use the fact that the scope of
 //    a function is not global. that way, we can be sure that we don't pollute the global namespace
 
-(function Dashcore_Closure() {
+(function Dashcore_core_initialization() {
 
 //-----------------------------------------------------------------
 // If there already is $ variable, we don't want it to interrupt our $ function. So, we save it
@@ -43,6 +43,10 @@ if(typeof window.$ != 'undefined') {
     var __DASHCORE_OLD_$__ = window.$;
     delete window.$;
 }
+
+// User-friendly name for safari profiler
+this.displayName = 'Dashcore core initialization';
+
 //------------------------------------------------------------------
 // $ object. this object is the main namespace for our function. it's also a function that can
 //    recive  either CSS selector or HtmlDOMElement and return a chainer object for the resaulting
@@ -80,6 +84,15 @@ $._selector = function(query, element) {
 }
 $._selector.counter = 0;
 
+// Function compiler/decompiler
+var funDecompileRegex = /function\s*\(([\d\s\w\$,\b]*)\)\s*\{([.\s]*)\}/;
+$.Fun = {};
+
+$.Fun.decompile = function(fn) {
+    console.log(fn.toString().trim());
+    console.log(funDecompileRegex.test(fn.toString().trim()));
+}
+
 //------------------------------------------------------------------
 // $.Object - The base object that every Dashcore object will inherit
 //    $.Object provide support for multiple inheritance and interfaces
@@ -88,157 +101,176 @@ $._selector.counter = 0;
 // Implementation inspired by John Resig "Simple JavaScript Inheritance" (and sometimes identical
 //    to it)
 //    http://ejohn.org/blog/simple-javascript-inheritance/
-(function(){
-    var initializing = false;
-    var interfaces = [];
 
-    $.Object = function() {};
+var initializing = false;
+var interfaces = [];
 
-    $.Object.subclass = function(definition) {
-        // Creating a base class
-        function ReturnedClass() {
-            // All construction is actually done in the init method
-            if ( !initializing && this.init )
-                this.init.apply(this, arguments);
-        }
+$.Object = function() {};
 
-        // Enforce the constructor to be what we expect
-        ReturnedClass.constructor = ReturnedClass;
+$.Object.subclass = function(definition) {
+	// Creating a base class
+	function ReturnedClass() {
+	    // All construction is actually done in the init method
+	    if ( !initializing && this.init )
+	        this.init.apply(this, arguments);
+	}
+	
+	// Enforce the constructor to be what we expect
+	ReturnedClass.constructor = ReturnedClass;
 
-		// Take care of inheritance
+	// Take care of inheritance
 
-        // Instantiate a base class (but only create the instance, 
-        // don't run the init constructor) 
-        initializing = true;
-        var proto = new this();                // Inherit instance functions/properties
-        initializing = false;
+    // Instantiate a base class (but only create the instance, 
+    // don't run the init constructor) 
+    initializing = true;
+    var proto = new this();                // Inherit instance functions/properties
+    initializing = false;
 
-        // Take care of static methods and properties
-        
-        // Inherit static functions/properties
-        for(var i in this) {
-            ReturnedClass[i] = this[i];
-        }
-		// Override superclass in order to be relevent
-        // Augment functions/properties from definition
-		// Augment static functions/properties
-		if('static' in definition)
-		    this.obtain.call(ReturnedClass, definition['static']);
-		// Augment instance functions/properties as static to proto, and then set
-		//    ReturnedClass's prototype to proto (in the end of the function)
-		this.obtain.call(proto, definition);
-		delete definition;
-        
-        // Populate our constructed prototype object 
-        ReturnedClass.prototype = proto;
-        // Give instance function have access to static functions / variables
-        ReturnedClass.prototype._Self = ReturnedClass;
-        return ReturnedClass;
+	// Inherit static functions/properties
+    for(var i in this) {
+        ReturnedClass[i] = this[i];
     }
 
-	$.Object.extend = function(definition) {
-	    // Augment static functions/properties
-	    if("static" in definition) {
-	        this.obtain.call(this, definition['static']);
-	        delete definition['static'];
-	    }
-	
-	    // Augment instance functions/properties
-	    this.obtatin.call(this.prototype, definition)
-	}
-	
-	$.Object.obtain = function(functions) {
-	    for(i in functions)
-	        this[i] = functions[i];
-	}
+	// Override superclass in order to be relevent
+    ReturnedClass.superclass = this;
 
-    $.Object.implement = function(interfacePointer) {
-        // Gets the actual interface from the pointer
-        var nargs = 0,
-            definition = interfaces[interfacePointer];
-    
-        // Checks for static functions
-        if(typeof definition['static'] != 'undefined') {
-            for(i in definition['static']) {
-                if(typeof this[i] == undefined)
-                    throw("Dashcore.Interface - implement: static method "+i+
-                                " does not exists");
-    
-                nargs = this[i].length;
-                if(nargs != definition['static'][i]) {
-                    throw("Dashcore.Interface - implement: static method "+i+" has "+
-                                nargs+" arguments instead of "+definition['static'][i]);
-                }
-            }
-        }
+    // Augment functions/properties from definition
+    // Augment static functions/properties
+    if('static' in definition)
+        this.obtain.call(ReturnedClass, definition['static']);
+    // Augment instance functions/properties as static to proto, and then set
+    //    ReturnedClass's prototype to proto (in the end of the function)
+    this.obtain.call(proto, definition);
+    delete definition;
+
+    // Populate our constructed prototype object 
+    ReturnedClass.prototype = proto;
+    // Give instance function have access to static functions / variables
+    ReturnedClass.prototype._Self = ReturnedClass;
+    return ReturnedClass;
+}
+
+$.Object.extend = function(definition) {
+    // Augment static functions/properties
+    if("static" in definition) {
+        this.obtain.call(this, definition['static']);
         delete definition['static'];
-    
-        for(var i in definition) {
-            if(typeof this.prototype[i] == 'undefined')
-                throw("Dashcore.Interface - implement: method "+i+" does not exists");
-    
-            nargs = this.prototype[i].length
-            if(nargs != definition[i]) {
-                throw("Dashcore.Interface - implement: method "+i+" has "+nargs+
-                            " arguments instead of "+definition[i]);
+    }
+
+    // Augment instance functions/properties
+    this.obtatin.call(this.prototype, definition)
+}
+
+$.Object.obtain = function(functions) {
+    for(i in functions)
+        this[i] = functions[i];
+}
+
+$.Object.implement = function(interfacePointer) {
+    // Gets the actual interface from the pointer
+    var nargs = 0,
+        definition = interfaces[interfacePointer];
+
+    // Checks for static functions
+    if(typeof definition['static'] != 'undefined') {
+        for(i in definition['static']) {
+            if(typeof this[i] == undefined)
+                throw("Dashcore.Interface - implement: static method "+i+
+                            " does not exists");
+
+            nargs = this[i].length;
+            if(nargs != definition['static'][i]) {
+                throw("Dashcore.Interface - implement: static method "+i+" has "+
+                            nargs+" arguments instead of "+definition['static'][i]);
             }
         }
-        delete definition;
-        // Cache the resault in a static vatiable that can be 
-        this._implementations.push(interfacePointer);
-        return this;
     }
+    delete definition['static'];
 
-    $.Object._implementations = [];
+    for(var i in definition) {
+        if(typeof this.prototype[i] == 'undefined')
+            throw("Dashcore.Interface - implement: method "+i+" does not exists");
 
-    $.Object.prototype.implements = function(interfacePointer) {
-        return (interfacePointer in this._Self._implementations);
+        nargs = this.prototype[i].length
+        if(nargs != definition[i]) {
+            throw("Dashcore.Interface - implement: method "+i+" has "+nargs+
+                        " arguments instead of "+definition[i]);
+        }
     }
+    delete definition;
+    // Cache the resault in a static vatiable that can be 
+    this._implementations.push(interfacePointer);
+    return this;
+}
+
+$.Object._implementations = [];
+
+$.Object.prototype.implements = function(interfacePointer) {
+    return (interfacePointer in this._Self._implementations);
+}
+
+$.Object._super = function(method) {
+    Array.prototype.shift.call(arguments);
     
-    $.Object._super = function(method) {
-        Array.prototype.shift.call(arguments);
+    if(method in this.superclass.prototype)
+        return this.superclass.prototype[method].apply(this.prototype, arguments);
+
+    return this.superclass[method].apply(this, arguments)
+}
+
+$.Object.toString = function() {
+    if(typeof this.prototype.init != 'undefined')
+        return this.prototype.init.toString();
+
+    if('toString' in this.prototype)
+        return this.prototype.toString();
+}
+
+$.Interface = function(definition) {
+    // Store the actual interface in a private variable
+    interfaces.push(this.Interface._parse(definition));
+    // Return a pointer to the interface
+    return interfaces.length - 1;
+}
+
+$.Interface._parse = function(definition) {
+    var returnVal = {};
+
+    if('static' in definition) {
+        returnVal['static'] = this._parse(definition['static']);
+        delete definition['static'];
+    }
+
+    for(var i in definition) {
+        // Interface only support methods
+        if(typeof definition[i] == "function") {
+            // Interfaces only care about function name and number of arguments
+            //    but it may change
+            returnVal[i] = definition[i].length;
+        }
+    }
+    return returnVal;
+}
+
+//------------------------------------------------------------------
+// ChainerObject: a wide selution for chaining. The content may vary: it may be HTML Elements
+//    from a CSS Selector or an object returned from a function which can be chained.
+//    The idea is that chainig is a searies of action which are performed by a praticular subject.
+//
+// ChainerObject is also implementing a flyWeight, which means it is more memory efficient. but
+//    allso mean that if save a reference for the object, performed another chained task and then
+//    use the saved reference, it will point to the last task content. In order to overcome this
+//    problem, whenever you save the object to a reference, use the save method to ensure that the
+//    ChinerObject content will remain the same.
+//
+// Another useful method is the value method: is can be changed based on the last function. By
+//    defualt the value is the object content
+$.ChinerObject = $.Object.subclass({
+    'init': function(definiton) {
+        this.extend(definition);
         
-        if(method in this.superclass.prototype)
-            return this.superclass.prototype[method].apply(this.prototype, arguments);
-
-        return this.superclass[method].apply(this, arguments)
     }
-
-    $.Object.toString = function() {
-        if(typeof this.prototype.init != 'undefined')
-            return this.prototype.init.toString();
-
-        if('toString' in this.prototype)
-            return this.prototype.toString();
-    }
-
-    $.Interface = function(definition) {
-        // Store the actual interface in a private variable
-        interfaces.push(this.Interface._parse(definition));
-        // Return a pointer to the interface
-        return interfaces.length - 1;
-    }
-
-    $.Interface._parse = function(definition) {
-        var returnVal = {};
-
-        if('static' in definition) {
-            returnVal['static'] = this._parse(definition['static']);
-            delete definition['static'];
-        }
-
-        for(var i in definition) {
-            // Interface only support methods
-            if(typeof definition[i] == "function") {
-                // Interfaces only care about function name and number of arguments
-                //    but it may change
-                returnVal[i] = definition[i].length;
-            }
-        }
-        return returnVal;
-    }
-
-})();
+});
 
 //------------------------------------------------------------------
 // ChainerObject - The object used to chain commands. The idea of the API is that you select a
@@ -341,7 +373,8 @@ $.plugIn = function(functionName, theFunction, valueOverrideFunction) {
 var requireExecutionQueue    = [],
     requireImportedFiles    = [],
     isQueueRunning            = false,
-    requireNamespaces        = {};
+    requireNamespaces        = {},
+	pages                    = {};
 
 // Find dashcore directory: important for the Require function
 //    dashcore directory is used as the $ namespace
@@ -358,31 +391,6 @@ for(var i = 0; i< slength; i++) {
 }
 // Cleanup calculations
 delete scriptTags, slength, isDashcoreDotJS;
-
-// globalEvel function: evaluate code in the global scope
-//     a slightly modified version of the globalEvel function that can be found in the
-//    book "Secrets of the JavaScript Ninja" by John Resig.
-//    based on the work of Andrea Giammarchi:
-//    http://webreflection.blogspot.com/2007/08/global-scope-evaluation-and-dom.html
-function globalEval(data) { 
-    data = data.replace(/^\s*|\s*$/g, ""); 
-    if (data) { 
-        /*var head = document.getElementsByTagName("head")[0] || 
-            document.documentElement, 
-            script = document.createElement("script");
-        script.type = "text/javascript"; 
-        script.text = data;
-        head.appendChild( script );
-        head.removeChild( script );*/
-
-		try {
-		    eval(data);
-		} catch(e) {
-		    console.dir(e);
-		    throw e;
-		}
-     }
-}
 
 // filterUrl function: parses the url and get the actual path
 //    taken from the omgrequire jquery branch
@@ -402,11 +410,12 @@ function parseFile(url, inputUrl, content, onload) {
 	var dependancies = [];
 
     content = content.replace(parseFile.findDependancies, function(all, match) {
+		var returnVal = "/* File "+match+" was imported */";
         if(match in requireImportedFiles)
-            return '';
+            return returnVal;
 		
 		dependancies.push(match);
-        return '';
+        return returnVal;
     });
     
     // Adds clusure to make the file local, and make sure $ is pointing to dashcore
@@ -493,9 +502,6 @@ $.Require = function(inputUrl, onload) {
 
 	$.File.read(url, function(content) {
         parseFile(url, inputUrl, content, onload);
-        if(typeof onreadload == 'function') {
-			window.setTimeout(function() {onreadload(content)}, 1);
-        }
 		// Try to start the execution queue
 		if(!isQueueRunning)
 		    loadNextFile();
@@ -523,10 +529,12 @@ $.File.read = function(path, onloadfn, timeout) {
     // Create the iframe
     var iframe    = document.createElement('iframe'),
         timeout    = timeout || 3000,                    // 3 seconds
-		handler;
+		handler,
+		thisDate = new Date(),
+		thisTime = thisDate.getTime();
 
 	iframe.style.display = 'none';                    // Make the iframe invisiable
-	iframe.src = path;
+	iframe.src = path+'?__'+thisDate.getTime()+'='+thisTime;
 
 
     iframe.onload = function() {
