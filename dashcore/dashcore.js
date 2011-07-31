@@ -146,6 +146,95 @@ $_Object.extend = function(definition) {
 	this.obtatin.call(this.prototype, definition)
 }
 
+// Function compiler/decompiler
+var funDecompileRegex    = /function\s*([\w_$]*)\(([\s\w_\$,\b]*)\)\s*\{([\w\W]*)\}/,
+    funWhitespaces        = /\s/g;
+
+$_Fun = {
+    'decompile':function(fn) {
+        var parsedFunction = funDecompileRegex.exec(fn.toString());
+
+        // Remove whitespaces from the arguments list
+        parsedFunction[2] = parsedFunction[2].replace(funWhitespaces, '');
+
+        // Split the arguments list into an arrau and then ensure that if there are no 
+        //    arguments, the result will be [], not [""]
+        if(parsedFunction[2] != '')
+            parsedFunction[2] = parsedFunction[2].split(',');
+        else
+            parsedFunction[2] = [];
+        parsedFunction[3] = parsedFunction[3].replace(/^\s+|\s+$/g,"");
+
+        return {
+            'all': parsedFunction[0],
+            'name': parsedFunction[1],
+            // Parse arguments: first remove whitespace and then split by ,
+            'args': parsedFunction[2],
+            'content': parsedFunction[3],
+            'compile': function() {
+                return $.Fun.compile({'name': this.name,'args': this.args, 'content': this.content});
+            }
+        }
+    },
+    'compile': function(definition) {
+        var FunctionArgs = definition.args || [];
+        if (definition.name.trim().length != 0) {
+            definition.name = ' '+definition.name+' ';
+        }
+        eval('var result = function '+definition.name+' ('+definition.args.join(', ')+') {'+definition.content+'}');
+        return result;
+    }
+};
+
+// An extension to JavaScript's String.replace to replace only what isn't
+//    between quotes
+function StringReplaceNotWithinQuotes(str, expression, callback) {
+    var i = 0,
+        di = -1,
+        quoteCount = 0,
+        dquoteCount = 0;
+    // Preform the replace
+    str = str.replace(expression, function(match) {
+        // Found the index of the match
+        matchIndex = arguments[arguments.length - 2]  - 1;
+        
+        // Count quotes and double quotes until the index of the match
+        //    note the scope of i and di, both declared outside this callback
+        //    this means that the loop starts from where it stoped before
+        do {
+            di = str.indexOf('"', di + 1);
+            if(di == -1)
+                break;
+            if(str[di - 1] == '\\')
+                continue;
+
+            dquoteCount++;
+        } while(di < matchIndex);
+
+        do {
+            i = str.indexOf("'", i + 1);
+            if(i == -1)
+                break;;
+            if(str[i - 1] == '\\')
+                continue;
+
+            quoteCount++;
+        } while(i < matchIndex);
+
+        // If both quetes and double quetes count is even, it means that the match
+        //    isn't between quotes or double quetes, return  the replacement
+        if( (quoteCount % 2 == 0) && (dquoteCount % 2 == 0) ) {
+            if(typeof callback == 'function')
+                return callback.apply(this, arguments);
+            return callback;
+        }
+
+        // match is between quotes, don't replace.
+        return match;
+    });
+    return str;
+}
+
 //------------------------------------------------------------------
 // $.Chainable: a wide selution for chaining. The content may vary: it may be HTML Elements
 //	from a CSS Selector or an object returned from a function which can be chained.
@@ -165,8 +254,6 @@ $_Object.extend = function(definition) {
 		- Decide if static methods sould be chainalyzed:
 		it is clear that some functions like init should not be chainalyzed, but if there
 		is a special use for chaining static function we can make an exception
-		- Rewrite the definition[i] function alteraition to use the function compiler instead
-		of clousure
 		- Decide if value function changing is a welcome addition
 		- Decide an appropriate name for the static init function
 */
@@ -197,17 +284,22 @@ var $_Chainable = $_Object.subclass({
 			return this._super('extend', this._chainalyze(definition));
 		},
 		'_chainalyze': function(definition) {
+			var tempFunc;
+
 			for(i in definition) {
 				// Static methods aren't being chainalyzed
 				if(i == 'static')
 					continue;
 
-				definition[i] = function(theFunction) {
-					return function() {
-						theFunction.apply(this, arguments);
-						return this;
-					}
-				}(definition[i]);
+				// Parse function to change the return to always return this
+				// First decompile the function:
+				tempFunc = $_Fun.decompile(definition[i]);
+				
+				// make sure that the function will always return this, but make sure it doesn't change strings!
+				tempFunc.content = StringReplaceNotWithinQuotes(tempFunc.content, /return\s*([^;])*[;\n]/gm, 'return this;');
+				tempFunc.content += "\nreturn this";            
+				
+				definition[i] = tempFunc.compile();
 			}
 
 			return definition;
@@ -292,11 +384,12 @@ var $ = $_Chainable.subclass({
 				
 		// Move $_Object and $_Chainable to the right place
 		'Object': $_Object,
-		'Chainable': $_Chainable
+		'Chainable': $_Chainable,
+		'Fun': $_Fun
     }
 });
 // Now when theres $, we don't need $_Object and $_Chainable
-delete $_Object, $_Chainable
+delete $_Object, $_Chainable, $_Fun;
 
 // The current version of $.Object was minimal, now extend it
 // Interface functionality
@@ -367,47 +460,6 @@ $.Interface._parse = function(definition) {
     }
     return returnVal;
 }
-
-// Function compiler/decompiler
-var funDecompileRegex = /function\s*([\w_$]*)\(([\s\w_\$,\b]*)\)\s*\{([\w\W]*)\}/,
-    funWhitespaces = /\s/g;
-$.Fun = {
-    'decompile':function(fn) {
-        var parsedFunction = funDecompileRegex.exec(fn.toString());
-
-        // Remove whitespaces from the arguments list
-        parsedFunction[2] = parsedFunction[2].replace(funWhitespaces, '');
-
-        // Split the arguments list into an arrau and then ensure that if there are no 
-        //    arguments, the result will be [], not [""]
-        if(parsedFunction[2] != '')
-            parsedFunction[2] = parsedFunction[2].split(',');
-        else
-            parsedFunction[2] = [];
-        parsedFunction[3] = parsedFunction[3].replace(/^\s+|\s+$/g,"");
-
-        return {
-            'all': parsedFunction[0],
-            'name': parsedFunction[1],
-            // Parse arguments: first remove whitespace and then split by ,
-            'args': parsedFunction[2],
-            'content': parsedFunction[3],
-            'compile': function() {
-                return $.Fun.compile({'name': this.name,'args': this.args, 'content': this.content});
-            }
-        }
-    },
-    'compile': function(definition) {
-        var FunctionArgs = definition.args || [];
-        if (definition.name.trim().length != 0) {
-            definition.name = ' '+definition.name+' ';
-        }
-        console.log('log: function'+definition.name+'('+definition.args.join(', ')+') {'+definition.content+'}');
-
-        eval('var result = function '+definition.name+' ('+definition.args.join(', ')+') {'+definition.content+'}');
-        return result;
-    }
-};
 
 //------------------------------------------------------------------
 // Dynamic JavaScript loading mechanism

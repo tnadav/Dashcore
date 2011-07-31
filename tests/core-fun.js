@@ -11,8 +11,8 @@ test('Check fn1 - blank function', function() {
         decompiled1 = $.Fun.decompile(fn1),
         expected1 = {'args':[] , 'content':'', 'all':'function () {}', 'name': ''};
     same(decompiled1.args        ,expected1.args, 'args');
-    equals(removeWhiteSpace(decompiled1.content)    ,removeWhiteSpace(expected1.content), 'content');
-    equals(removeWhiteSpace(decompiled1.all)        ,removeWhiteSpace(expected1.all), 'all');
+    comparable(decompiled1.content    ,expected1.content, 'content');
+	comparable(decompiled1.all        ,expected1.all, 'all');
     equals(decompiled1.name        ,expected1.name, 'name');
 })
 
@@ -22,8 +22,8 @@ test('Check fn2 - blank function with arguments', function() {
         expected2 = {'args':['a', 'b', 'c', 'd', 'e'] , 'content':'', 'all':'function (a, b, c, d, e) {}', 'name': ''};
 
     same(decompiled2.args        ,expected2.args, 'rgs');
-    equals(removeWhiteSpace(decompiled2.content)    ,removeWhiteSpace(expected2.content), 'content');
-    equals(removeWhiteSpace(decompiled2.all)        ,removeWhiteSpace(expected2.all), 'all');
+	comparable((decompiled2.content)    ,(expected2.content), 'content');
+	comparable((decompiled2.all)        ,(expected2.all), 'all');
     equals(decompiled2.name        ,expected2.name, 'name');
 })
 
@@ -36,8 +36,8 @@ test('Check fn3 - blank function with wired arguments and whitespaces', function
                     'all':'function (a0, b$, _c, D, eQ) {}', 'name': ''};
 
     same(decompiled3.args        ,expected3.args, 'args');
-    equals(removeWhiteSpace(decompiled3.content),removeWhiteSpace(expected3.content), 'content');
-    equals(removeWhiteSpace(decompiled3.all)    ,removeWhiteSpace(expected3.all), 'all');
+	comparable(decompiled3.content,expected3.content, 'content');
+	comparable(decompiled3.all    ,expected3.all, 'all');
     equals(decompiled3.name        ,expected3.name, 'name');
 })
 
@@ -60,8 +60,8 @@ test('Check fn4 - function with arguments and complex content', function() {
                     }', 'name': ''};
 
     same(decompiled4.args        ,expected4.args, 'Check fn1 - blank function - args');    
-    equals(removeWhiteSpace(decompiled4.content)    ,removeWhiteSpace(expected4.content), 'Check fn1 - blank function - content');
-    equals(removeWhiteSpace(decompiled4.all)        ,removeWhiteSpace(expected4.all), 'Check fn1 - blank function - all');
+    comparable(decompiled4.content    ,expected4.content, 'Check fn1 - blank function - content');
+	comparable(decompiled4.all        ,expected4.all, 'Check fn1 - blank function - all');
     equals(decompiled4.name        ,expected4.name, 'name');
 });
 
@@ -70,8 +70,8 @@ test('Check fn5 - blank function with name', function() {
         decompiled5 = $.Fun.decompile(fn5),
         expected5 = {'args':[] , 'content':'', 'all':'function funcName() {}', 'name': 'funcName'};
     same(decompiled5.args        ,expected5.args, 'args');
-    equals(removeWhiteSpace(decompiled5.content)    ,removeWhiteSpace(expected5.content), 'content');
-    equals(removeWhiteSpace(decompiled5.all)        ,removeWhiteSpace(expected5.all), 'all');
+    comparable(decompiled5.content    ,expected5.content, 'content');
+	comparable(decompiled5.all        ,expected5.all, 'all');
     equals(decompiled5.name        ,expected5.name, 'name');
 })
 
@@ -79,15 +79,15 @@ module("Function compiler test");
 
 test('Recompile functions', function() {
     // Recompile fn1
-    var rfn1 = $.Fun.decompile(fn1).compile(function(definition) {return definition}),
-        rfn2 = $.Fun.decompile(fn2).compile(function(definition) {return definition}),
-        rfn3 = $.Fun.decompile(fn3).compile(function(definition) {return definition}),
-        rfn4 = $.Fun.decompile(fn4).compile(function(definition) {return definition}),
-        rfn5 = $.Fun.decompile(fn5).compile(function(definition) {return definition});
+    var rfn1 = $.Fun.decompile(fn1).compile(),
+        rfn2 = $.Fun.decompile(fn2).compile(),
+        rfn3 = $.Fun.decompile(fn3).compile(),
+        rfn4 = $.Fun.decompile(fn4).compile(),
+        rfn5 = $.Fun.decompile(fn5).compile();
 
-    equals(rfn1.toString(), fn1.toString(), 'Check if fn1 is intact');
-    equals(rfn2.toString(), fn2.toString(), 'Check if fn2 is intact');
-    equals(rfn3.toString(), fn3.toString(), 'Check if fn3 is intact');
-    equals(rfn4.toString(), fn4.toString(), 'Check if fn4 is intact');
-    equals(rfn5.toString(), fn5.toString(), 'Check if fn5 is intact');
+    	comparable(rfn1.toString(), fn1.toString(), 'Check if fn1 is intact');
+		comparable(rfn2.toString(), fn2.toString(), 'Check if fn2 is intact');
+		comparable(rfn3.toString(), fn3.toString(), 'Check if fn3 is intact');
+		comparable(rfn4.toString(), fn4.toString(), 'Check if fn4 is intact');
+		comparable(rfn5.toString(), fn5.toString(), 'Check if fn5 is intact');
 })
