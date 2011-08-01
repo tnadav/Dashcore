@@ -488,33 +488,31 @@ for(var i = 0; i< slength; i++) {
 delete scriptTags, slength, isDashcoreDotJS;
 
 // filterUrl function: parses the url and get the actual path
-//    taken from the omgrequire jquery branch
+//	taken from the omgrequire jquery branch
 function filterUrl(url) {
-    if ( !/\./.test(url) || (/^([\w\d$]+)./.test(url) && !/\//.test( url ) && !/.js$/.test( url )) ) {
-        url = url.replace(/\./g, "/").replace(/^([\w\d$]+)./, function(all, name) {
-            return (requireNamespaces[name] || name) + "/";
-        }) + ".js";
-    }
-    return url;
+	if ( !/\./.test(url) || (/^([\w\d$]+)./.test(url) && !/\//.test( url ) && !/.js$/.test( url )) ) {
+		url = url.replace(/\./g, "/").replace(/^([\w\d$]+)./, function(all, name) {
+			return (requireNamespaces[name] || name) + "/";
+		}) + ".js";
+	}
+	return url;
 }
 
 // parseFile function: find file dependancies and recursively execute the scripts
-//  
-function parseFile(url, inputUrl, content, onload) {
+// Settings: Object{url, inputUrl, content, onload, afterDependencyQueued}
+function parseFile(settings) {
     // First, find the files depandencies
 	var dependancies = [];
 
-    content = content.replace(parseFile.findDependancies, function(all, match) {
-		var returnVal = "/* File "+match+" was imported */";
-        if(match in requireImportedFiles)
-            return returnVal;
-		
-		dependancies.push(match);
-        return returnVal;
+    settings.content = settings.content.replace(parseFile.findDependancies, function(all, match) {
+		if(!requireImportedFiles.hasOwnProperty(match))
+		    dependancies.push(match);
+
+        return "/* File "+match+" was imported */";
     });
     
     // Adds clusure to make the file local, and make sure $ is pointing to dashcore
-    content = "(function "+inputUrl.replace(/[\.\-+]/g, '_')+"($) {\n"+content+"\n})(Dashcore);";
+    settings.content = "(function "+settings.inputUrl.replace(/[\.\-+\/]/g, '_')+"($) {\n"+settings.content+"\n})(Dashcore);";
 
     var length = dependancies.length;
     // If there are no dependancies, simply add current file to the queue
@@ -525,9 +523,9 @@ function parseFile(url, inputUrl, content, onload) {
             isFileFound = false;
         for(var i = 0; i < qLength; i++) {
             // Check if the file on the queue is this file by url
-            if(requireExecutionQueue[i].url == url) {
+            if(requireExecutionQueue[i].url == settings.url) {
                 // This file is in this queue
-                requireExecutionQueue[i]['content'] = content;    // Adds this file content to the queue
+                requireExecutionQueue[i]['content'] = settings.content;    // Adds this file content to the queue
                 isFileFound = true;
                 
                 // File was found, prevent from the loop to run again
@@ -538,25 +536,41 @@ function parseFile(url, inputUrl, content, onload) {
         // If the file was not found in the queue
         if(!isFileFound) {
             // Add the file to the queue
-            requireExecutionQueue.push({'url':url, 'inputUrl':inputUrl,'onload':onload, 'content':content});
+            requireExecutionQueue.push(settings);
         }
+		// Perform action after the dependency queued
+		if(typeof settings.afterDependencyQueued == 'function')
+			settings.afterDependencyQueued();
     } else {
-        --length;
+		// Special action for last dependency
+		if(typeof settings.afterDependencyQueued == 'function') {
+		    var callback = (function(dependencies) {
+		        var count    = 0,
+		            pass    = settings;
+		        return function() {
+		            if(++count == dependencies) {
+		                requireExecutionQueue.push(settings);
+		                settings.afterDependencyQueued();
+		            }
+		                
+		        }
+		    })(length);
+		} else {
+		    var callback = (function(dependencies) {
+		        var count    = 0,
+		            pass    = settings;
+		        return function() {
+		            if(++count == dependencies) {
+		                requireExecutionQueue.push(settings);
+		            }
+		        }
+		    })(length);
+		}
         for(var i = 0; i<length; i++)
-            $.Require(dependancies[i]);
-
-        // Special action for the last dependancy
-        $.Require(dependancies[length], (function() {
-            var loadedUrl = dependancies[length];
-            
-            return function() {
-                // Add the current file to the queue after the lastest file dependancies
-                requireExecutionQueue.push({'url':url, 'inputUrl':inputUrl, 'onload':onload, 'content':content});
-            }
-        })());
+            $.Require(dependancies[i], null, callback);
     }
 }
-parseFile.findDependancies = /^#\s?Require\s*([a-z0-9\.$]*)/gmi
+parseFile.findDependancies = /^#\s?Require\s*([a-z0-9\.\/$]*)/gmi
 
 function loadNextFile() {
 	// Stop queue there are no files in the queue or the next file hadn't loaded yet
@@ -583,7 +597,7 @@ function loadNextFile() {
 }
 // Require function: used to import libraries components
 // require only imports file once, if the file was already imported then the function does nothing
-$.Require = function(inputUrl, onload) {
+$.Require = function(inputUrl, onload, afterDependencyQueued) {
     url = filterUrl(inputUrl);
     // Check if file was already loaded
     if(url in requireImportedFiles) {
@@ -595,7 +609,8 @@ $.Require = function(inputUrl, onload) {
 	requireImportedFiles[url] = true;
 
 	$.File.read(url, function(content) {
-        parseFile(url, inputUrl, content, onload);
+        parseFile({'url': url, 'inputUrl': inputUrl, 'content': content, 'onload': onload,
+					'afterDependencyQueued': afterDependencyQueued});
 		// Try to start the execution queue
 		if(!isQueueRunning)
 		    loadNextFile();
@@ -612,7 +627,7 @@ $.Namespace.Delete = function(ns) {
     delete requireNamespaces[NS];
 }
 
-// LoadFile function: asynchronous way of loading plain text files to a variables using
+// $.File.read function: asynchronous way of loading plain text files to a variables using
 //    iframe. while using AJAX appears to be a more simple solution, it can't be done locally,
 //    and in the widget enviorment, everything MUST be local
 //
@@ -628,7 +643,7 @@ $.File.read = function(path, onloadfn, timeout) {
 		thisTime = thisDate.getTime();
 
 	iframe.style.display = 'none';                    // Make the iframe invisiable
-	iframe.src = path+'?__'+thisDate.getTime()+'='+thisTime;
+	iframe.src = path;
 
 
     iframe.onload = function() {
