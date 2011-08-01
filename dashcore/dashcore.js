@@ -1,33 +1,25 @@
 /*
-    Dashcore - Development version
-    ------------------------------
+    Dashcore	- Dashboard widget JavaScript library
+	dashcore.js	- Core functionality of the library itself
+				  Provides $.Object, $.Interface, $.Require,
+				  $.File.read and $.Fun
+	Copyright 2011 Nadav Tenenbaum
+	Released under the LPGL 3 License 
+    ----------------------------------------------
+	This file is part of Dashcore.
 
-    Why was Dashcore invented?
-
-        The situation as it is today is that there are tons of JavaScript libraries.
-        so why creating another one?
-        
-        First, it is a dashdoard widget JavaScript library, and there is a difference. 
-        JavaScript on webpages is often done in a way so it will add certin functionality
-        to the application. When developing a dashboard widget, JavaScript is the application.
-        As I was working on a widget, I realised that developing for a dashboard widget is
-        defferent. It requires a more advanced OOP capeabilities, thease capeabilities are one
-        that JavaScript doesn't have, but can be emulated. The main purpose of this library is
-        to make advanced OOP on JavaScript easy. This library is heavily inspired by the book
-        "Pro JavaScript Design Patterns", written by Ross Harmes and Dustin Diaz.
-
-        Second, some components are unique to dashboard, such as Preferences, Instance preferences
-        and i18n.
-
-        Third, other libraries have to deal with supporting other browser, which add an additional 
-        overhead, this library doesn't because it doesn't need to.
-
-        And Forth, when developing a library a lot of files is a problem because this makes a lot
-        of HTTP requstes. This library use as much files as it can, in order make it as modular as
-        it can.
-
-        Sorry for my poor english, as you can see English isn't my native language, and it will
-        affect my comments. I hope that you will enjoy using Dashcore.
+	Dashcore is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Lesser General Public License as published
+	by the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+	
+	Dashcore is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Lesser General Public License for more details.
+	
+	You should have received a copy of the GNU Lesser General Public License
+	along with Dashcore.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 // This part may be confusing. Basically it's a closure.
